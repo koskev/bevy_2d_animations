@@ -102,6 +102,7 @@ fn update_animations(
     ew_animation_finished.send_batch(animation_finished_events);
 }
 
+/// A very simple plugin to manage 2d Animations
 pub struct AnimationPlugin;
 
 impl Plugin for AnimationPlugin {
