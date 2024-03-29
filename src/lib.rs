@@ -1,6 +1,9 @@
 use bevy::prelude::*;
+use events::AnimationFinishedEvent;
 
 use std::collections::{HashMap, VecDeque};
+
+mod events;
 
 #[derive(Clone, Debug, Default)]
 pub struct AnimationData {
@@ -29,10 +32,15 @@ pub struct AnimatedSprite {
 pub trait Animated {
     fn add_animation(&mut self, name: &str, indices: Vec<usize>, speed: f32);
     fn queue_animation(&mut self, name: &str, looped: bool, follow_up: Option<Vec<String>>);
+    /// Updates the current animation
     fn update(&mut self, time: &Time<Virtual>, atlas: &mut TextureAtlas);
+    fn is_animation_finished(&self) -> bool;
 }
 
 impl Animated for AnimatedSprite {
+    fn is_animation_finished(&self) -> bool {
+        self.current_animation.current_index + 1 == self.current_animation.indices.len()
+    }
     fn add_animation(&mut self, name: &str, indices: Vec<usize>, speed: f32) {
         self.animation_data.insert(
             name.to_string(),
@@ -56,7 +64,7 @@ impl Animated for AnimatedSprite {
         self.current_animation.timer.tick(time.delta());
         if self.current_animation.timer.just_finished() {
             // Check if we can increase the index without overflow
-            if self.current_animation.current_index + 1 >= self.current_animation.indices.len() {
+            if self.is_animation_finished() {
                 // Set to 0 if we have looping enabled. Otherwise do nothing
                 if self.current_animation.looped {
                     self.current_animation.current_index = 0;
@@ -77,12 +85,21 @@ impl Animated for AnimatedSprite {
 }
 
 fn update_animations(
-    mut q_animation: Query<(&mut AnimatedSprite, &mut TextureAtlas)>,
+    mut q_animation: Query<(&mut AnimatedSprite, &mut TextureAtlas, Entity)>,
     time: Res<Time<Virtual>>,
+    mut ew_animation_finished: EventWriter<AnimationFinishedEvent>,
 ) {
-    for (mut sprite, mut atlas) in &mut q_animation {
+    let mut animation_finished_events = vec![];
+    for (mut sprite, mut atlas, entity) in &mut q_animation {
         sprite.update(&time, &mut atlas);
+        if sprite.is_animation_finished() {
+            animation_finished_events.push(AnimationFinishedEvent {
+                name: sprite.current_animation.name.clone(),
+                entity,
+            })
+        }
     }
+    ew_animation_finished.send_batch(animation_finished_events);
 }
 
 pub struct AnimationPlugin;
